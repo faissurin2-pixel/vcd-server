@@ -1,0 +1,11 @@
+{
+  "port": 8080,
+  "serverName": "VICE CITY DRIFT",
+  "maxPlayers": 16,
+  "allowRegister": true,
+  "admins": [],
+  "daySec": 1200,
+  "badWords": [],
+  "spawnProtectSec": 3,
+  "trustProxy": false
+}
