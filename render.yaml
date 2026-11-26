@@ -1,0 +1,24 @@
+# Render Blueprint — VICE CITY DRIFT online server (game page + WebSocket + accounts)
+services:
+  - type: web
+    name: vice-city-drift
+    runtime: node
+    plan: starter            # free plan sleeps after idle and has no persistent disk -> use a paid plan
+    region: singapore        # closest to Thailand
+    buildCommand: npm ci --omit=dev
+    startCommand: node server.js
+    healthCheckPath: /api/status
+    autoDeployTrigger: commit
+    disk:
+      name: vcd-data
+      mountPath: /var/data   # accounts + backups live here (survive restarts/redeploys)
+      sizeGB: 1
+    envVars:
+      - key: NODE_VERSION
+        value: "20"
+      - key: DATA_DIR
+        value: /var/data
+      - key: TRUST_PROXY
+        value: "true"
+      - key: SERVER_NAME
+        value: VICE CITY DRIFT

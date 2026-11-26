@@ -3,7 +3,7 @@
 //  VICE CITY DRIFT — game server
 //  * serves the game page (gzip/brotli) so friends only need a link
 //  * accounts: register / login (scrypt-hashed passwords, token sessions)
-//  * saves each player's profile (money, weapons, armor, stats)
+//  * saves each player's profile (money, bag, cars, work level, weapons, armor, stats) with net-worth anti-cheat
 //  * WebSocket room: relays player/vehicle state in ~15 Hz snapshots, chat,
 //    gunfire, validated PvP hits, kill feed, shared time-of-day + weather
 //  Run:  npm install  &&  node server.js        (see README.md)
@@ -18,6 +18,8 @@ const cfg = Object.assign({
   gameFile: '', dataDir: path.join(__dirname, 'data'), allowRegister: true, admins: [], trustProxy: false,
   daySec: 1200, startHour: 17.2, registerPerHourPerIp: 6, badWords: [], spawnProtectSec: 3, sessionDays: 14,
 }, readJson(path.join(__dirname, 'config.json')));
+const E = process.env, truthy = v => /^(1|true|yes|on)$/i.test(String(v));
+if (E.HOST) cfg.host = E.HOST; if (E.DATA_DIR) cfg.dataDir = path.resolve(E.DATA_DIR); if (E.SERVER_NAME) cfg.serverName = E.SERVER_NAME; if (E.TRUST_PROXY !== undefined) cfg.trustProxy = truthy(E.TRUST_PROXY); if (E.ALLOW_REGISTER !== undefined) cfg.allowRegister = truthy(E.ALLOW_REGISTER); if (E.ADMINS) cfg.admins = E.ADMINS.split(',').map(x => x.trim()).filter(Boolean); // env overrides (Docker / systemd)
 if (process.env.PORT) cfg.port = +process.env.PORT; if (process.env.MAX_PLAYERS) cfg.maxPlayers = +process.env.MAX_PLAYERS; if (process.env.GAME_FILE) cfg.gameFile = process.env.GAME_FILE;
 const GAME_CANDIDATES = [cfg.gameFile, path.join(__dirname, 'public', 'index.html'), path.join(__dirname, '..', 'dist', 'game.html')].filter(Boolean);
 const gamePath = GAME_CANDIDATES.find(f => { try { return fs.statSync(f).isFile(); } catch (e) { return false; } });
@@ -34,7 +36,10 @@ function cleanText(s, n) { return String(s == null ? '' : s).replace(/[\u0000-\u
 function filterBad(s) { if (!cfg.badWords.length) return s; let o = s; for (const w of cfg.badWords) { if (!w) continue; o = o.replace(new RegExp(w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'), m => '*'.repeat(m.length)); } return o; }
 
 // ---------------------------------------------------------------- account store (JSON file, atomic writes)
-const DEFAULT_PROFILE = () => ({ money: 2500, weapons: { pistol: [12, 72] }, cur: 'fists', armor: 0, packages: 0, missions: 0, kills: 0, pvpKills: 0, pvpDeaths: 0, playSec: 0, pos: null });
+const RPD = JSON.parse(fs.readFileSync(path.join(__dirname, 'rp_data.json'), 'utf8')); // economy tables (shared with the client build)
+const NEWBIE_POS = [-33.5, -39.5]; // plaza spawn (block 5,5) — new accounts appear next to the gift box
+const emptyRP = () => ({ v: 1, inv: {}, cars: [], xp: 0, card: 0, st: 0, n: [100, 100, 100], seq: 1, s: { picked: 0, mined: 0, fished: 0, crafted: 0, sold: 0 } });
+const DEFAULT_PROFILE = () => ({ money: 0, weapons: { pistol: [12, 72] }, cur: 'fists', armor: 0, packages: 0, missions: 0, kills: 0, pvpKills: 0, pvpDeaths: 0, playSec: 0, pos: NEWBIE_POS.slice(), rp: emptyRP() });
 const Store = {
   file: path.join(cfg.dataDir, 'accounts.json'), db: { users: {} }, dirty: false,
   load() { try { this.db = JSON.parse(fs.readFileSync(this.file, 'utf8')); if (!this.db.users) this.db.users = {}; } catch (e) { if (fs.existsSync(this.file)) { fs.copyFileSync(this.file, this.file + '.corrupt-' + Date.now()); log('! accounts.json unreadable, backup kept'); } } },
@@ -42,16 +47,59 @@ const Store = {
   get(name) { return this.db.users[String(name).toLowerCase()]; },
   mark() { this.dirty = true; },
 };
-Store.load(); setInterval(() => Store.flush(), 4000).unref();
+Store.load();
+// accounts made before the RP economy: everybody restarts from $0 as a newbie (weapons / stats are kept)
+for (const k in Store.db.users) { const pr = Store.db.users[k].profile; if (pr && !pr.rp) { pr.money = 0; pr.rp = emptyRP(); pr.pos = NEWBIE_POS.slice(); Store.mark(); } }
+setInterval(() => Store.flush(), 4000).unref();
+// rolling backups of the account file (startup + every 6 h, newest 24 kept) — a 24/7 server should survive a bad edit or a corrupted disk write
+function backupAccounts() {
+  try {
+    if (!fs.existsSync(Store.file)) return; const dir = path.join(cfg.dataDir, 'backup'); fs.mkdirSync(dir, { recursive: true });
+    const d = new Date(), p2 = n => String(n).padStart(2, '0'), stamp = d.getFullYear() + p2(d.getMonth() + 1) + p2(d.getDate()) + '-' + p2(d.getHours()) + p2(d.getMinutes());
+    fs.copyFileSync(Store.file, path.join(dir, 'accounts-' + stamp + '.json'));
+    const old = fs.readdirSync(dir).filter(f => /^accounts-\d{8}-\d{4}\.json$/.test(f)).sort(); while (old.length > 24) fs.unlinkSync(path.join(dir, old.shift()));
+  } catch (e) { log('! backup failed', e.message); }
+}
+backupAccounts(); setInterval(() => { Store.flush(); backupAccounts(); }, 6 * 3600 * 1000).unref();
+
 function hashPw(pw, salt) { return crypto.scryptSync(pw, salt, 64, { N: 16384, r: 8, p: 1 }); }
-function makeUser(name, pw) { const salt = crypto.randomBytes(16); return { name, salt: salt.toString('hex'), hash: hashPw(pw, salt).toString('hex'), created: Date.now(), lastLogin: 0, profile: DEFAULT_PROFILE(), bank: { t: Date.now(), tokens: 60000 }, sus: 0 }; }
+function makeUser(name, pw) { const salt = crypto.randomBytes(16); return { name, salt: salt.toString('hex'), hash: hashPw(pw, salt).toString('hex'), created: Date.now(), lastLogin: 0, profile: DEFAULT_PROFILE(), bank: { t: Date.now(), tokens: 40000 }, sus: 0 }; }
 function checkPw(u, pw) { try { const h = hashPw(pw, Buffer.from(u.salt, 'hex')), x = Buffer.from(u.hash, 'hex'); return h.length === x.length && crypto.timingSafeEqual(h, x); } catch (e) { return false; } }
 
-// profile validation: the client reports its progress, the server sanity-checks it (money can only rise at a plausible rate)
+// profile validation: the client reports its progress, the server sanity-checks it.
+// Money, bag contents and cars are all valued together ("net worth"); net worth may only rise as fast as a human could plausibly earn it.
+const RP_RATE = 200, RP_BANK = 100000; // $/s allowance, banked burst
+const rpClamp = (v, a, b, d) => (typeof v === 'number' && isFinite(v)) ? clamp(v, a, b) : d;
+function cleanRP(o, old) {
+  const r = emptyRP(); if (!o || typeof o !== 'object') return old || r;
+  if (o.inv && typeof o.inv === 'object') for (const k of Object.keys(o.inv)) { const it = RPD.items[k]; if (!it) continue; const n = Math.floor(rpClamp(o.inv[k], 0, 9999, 0)); if (n > 0) r.inv[k] = it.unique ? 1 : n; }
+  let wt = 0, cap = RPD.bag.base; for (const k in r.inv) { wt += RPD.items[k].w * r.inv[k]; if (RPD.items[k].bag) cap += RPD.items[k].bag; }
+  if (wt > cap + 15) return null; // more than the bag can physically hold
+  if (Array.isArray(o.cars)) { const ids = new Set(); for (const c of o.cars.slice(0, 12)) { if (!c || !RPD.cars[c.t]) continue; let id = Math.floor(rpClamp(c.id, 1, 1e9, 0)); if (!id || ids.has(id)) continue; ids.add(id); r.cars.push({ id, t: c.t, c: Math.floor(rpClamp(c.c, 0, 0xffffff, 0xffffff)), hp: rpClamp(c.hp, 0, 100, 100), wr: c.wr ? 1 : 0 }); } }
+  r.xp = Math.floor(rpClamp(o.xp, 0, 1e7, 0)); r.card = Math.floor(rpClamp(o.card, 0, 3, 0)); r.st = o.st ? 1 : 0;
+  if (Array.isArray(o.n)) r.n = [0, 1, 2].map(i => Math.round(rpClamp(o.n[i], 0, 100, 100)));
+  r.seq = Math.floor(rpClamp(o.seq, 1, 1e9, 1)); for (const c of r.cars) r.seq = Math.max(r.seq, c.id + 1);
+  if (o.s && typeof o.s === 'object') for (const k in r.s) r.s[k] = Math.floor(rpClamp(o.s[k], 0, 1e9, 0));
+  // work cards are bought with level: tier 2 needs level 4, tier 3 needs level 9 — and a card can never be dropped or skipped upward by more than one tier at a time
+  const K = RPD.levels.k, lvl = 1 + Math.floor(Math.sqrt(r.xp / K)); const maxCard = lvl >= RPD.levels.card3.lvl ? 3 : lvl >= RPD.levels.card2.lvl ? 2 : 1; if (r.card > maxCard) r.card = maxCard; if (old && r.card > old.card + 1) r.card = old.card + 1;
+  if (old && old.st) r.st = 1; // the starter pack can be claimed once per account
+  return r;
+}
+function rpWorth(rp, money) { let v = money; for (const k in rp.inv) v += RPD.items[k].p * rp.inv[k]; for (const c of rp.cars) v += RPD.cars[c.t].price * RPD.carResale; return v; }
+function bankOf(u) { const now = Date.now(), b = u.bank || (u.bank = { t: now, tokens: 40000 }); b.tokens = Math.min(RP_BANK * 2, b.tokens + (now - b.t) / 1000 * RP_RATE); b.t = now; return b; }
 function sanitizeProfile(u, p) {
   const old = u.profile, out = Object.assign({}, old); if (!p || typeof p !== 'object') return old;
-  const now = Date.now(), b = u.bank || (u.bank = { t: now, tokens: 60000 }); b.tokens = Math.min(120000, b.tokens + (now - b.t) / 1000 * 900); b.t = now; // allowance: $900/s, up to $120k banked
-  if (typeof p.money === 'number' && isFinite(p.money)) { let m = clamp(Math.floor(p.money), 0, 99999999); const gain = m - old.money; if (gain > 0) { const ok = Math.min(gain, Math.floor(b.tokens)); b.tokens -= ok; if (ok < gain) { u.sus = (u.sus || 0) + 1; log('! money clamp for', u.name, '+' + gain, '->', ok); } m = old.money + ok; } out.money = m; }
+  const now = Date.now(), b = u.bank || (u.bank = { t: now, tokens: 40000 }); b.tokens = Math.min(RP_BANK, b.tokens + (now - b.t) / 1000 * RP_RATE); b.t = now;
+  const oldRP = old.rp || emptyRP(); let newRP = cleanRP(p.rp, oldRP); let m = typeof p.money === 'number' && isFinite(p.money) ? clamp(Math.floor(p.money), 0, 99999999) : old.money;
+  if (!newRP) { u.sus = (u.sus || 0) + 1; log('! bag overweight for', u.name); newRP = oldRP; m = old.money; }
+  else {
+    const grant = (!oldRP.st && newRP.st) ? RPD.starter.money + RPD.cars[RPD.starter.car].price * RPD.carResale : 0;
+    const rise = rpWorth(newRP, m) - rpWorth(oldRP, old.money) - grant;
+    if (rise > 0) { if (rise > b.tokens + 1) { u.sus = (u.sus || 0) + 1; log('! net-worth clamp for', u.name, '+' + Math.round(rise), '(allowed ' + Math.floor(b.tokens) + ')'); newRP = oldRP; m = old.money; } else b.tokens -= rise; } else if (rise < 0 && u.giftDebt > 0) { const rf = Math.min(u.giftDebt, -rise); u.giftDebt -= rf; b.tokens += rf; } // gifts: the giver's allowance was debited when the gift was sent; it comes back as the bag really gets lighter
+    // XP can only rise at a human pace (a rare jewel craft is ~60 XP) — otherwise the work card tiers could be faked
+    const dx = newRP.xp - oldRP.xp; if (dx > 0) { const bx = u.xpBank || (u.xpBank = { t: now, v: 1500 }); bx.v = Math.min(4000, bx.v + (now - bx.t) / 1000 * 25); bx.t = now; if (dx > bx.v + 1) { newRP = Object.assign({}, newRP, { xp: oldRP.xp, card: Math.min(newRP.card, oldRP.card) }); u.sus = (u.sus || 0) + 1; log('! xp clamp for', u.name); } else bx.v -= dx; }
+  }
+  out.money = m; out.rp = newRP;
   if (p.weapons && typeof p.weapons === 'object') { const w = {}; for (const k of Object.keys(p.weapons)) { if (!WEAPONS[k] || k === 'fists' || k === 'car' || k === 'expl') continue; const a = p.weapons[k]; if (!Array.isArray(a)) continue; w[k] = [clamp(Math.floor(num(a[0])), 0, 99), clamp(Math.floor(num(a[1])), 0, 500)]; } out.weapons = w; }
   if (typeof p.cur === 'string' && (p.cur === 'fists' || out.weapons[p.cur])) out.cur = p.cur;
   out.armor = clamp(Math.round(num(p.armor, old.armor)), 0, 100);
@@ -119,7 +167,7 @@ const server = http.createServer((req, res) => {
 });
 
 // ---------------------------------------------------------------- realtime room
-const wss = new WebSocketServer({ noServer: true, maxPayload: 4096, perMessageDeflate: false });
+const wss = new WebSocketServer({ noServer: true, maxPayload: 8192, perMessageDeflate: false });
 const clients = new Map(); let nextId = 1;
 const world = { t0: Date.now(), hour0: cfg.startHour, rain: 0, rainTarget: 0, nextWeather: Date.now() + 120000, hourOverride: null };
 function worldHour() { return (world.hour0 + (Date.now() - world.t0) / 1000 * 24 / cfg.daySec) % 24; }
@@ -193,6 +241,13 @@ function onMessage(c, raw) {
       c.u.profile.pvpDeaths++; if (k && k !== c) k.u.profile.pvpKills++; Store.mark();
       bcast({ t: 'kill', k: k ? k.id : 0, v: c.id, w: lh ? lh.w : (m.w === 'wasted' ? 'wasted' : ''), kk: k ? k.u.profile.pvpKills : 0, vd: c.u.profile.pvpDeaths }); break;
     }
+    case 'give': { // item gift to a nearby player. Value moves between the two net-worth allowances, so the anti-cheat sees a transfer instead of income
+      const v = clients.get(m.to | 0), it = RPD.items[m.id], n = Math.floor(num(m.n)); if (!v || v === c || !it || it.unique || n < 1 || n > 999 || !c.st || !v.st) return;
+      if (!m.back) { if (now - (c.lastGive || 0) < 1200) return; c.lastGive = now; }
+      if (Math.hypot(c.st.p[0] - v.st.p[0], c.st.p[2] - v.st.p[2]) > 10) return sys('ผู้รับอยู่ไกลเกินไป', c);
+      const val = it.p * n, bc = bankOf(c.u), bv = bankOf(v.u); bc.tokens = Math.max(-RP_BANK, bc.tokens - val); c.u.giftDebt = Math.min(RP_BANK * 2, (c.u.giftDebt || 0) + val); bv.tokens = Math.min(RP_BANK * 2, bv.tokens + val); Store.mark();
+      send(v, { t: 'gift', from: c.id, name: c.name, id: m.id, n, back: m.back ? 1 : 0 }); log('~ give', c.name, '->', v.name, m.id, 'x' + n); break;
+    }
     case 'save': { if (now - c.lastSave < 2000) return; c.lastSave = now; sanitizeProfile(c.u, m.p); break; }
     case 'pg': { if (m.n === c.pgN && c.pgT) { c.ping = Math.round(now - c.pgT); c.pgT = 0; } break; }
     case 'bye': { c.ws.close(); break; }
@@ -246,7 +301,7 @@ if (process.stdin.isTTY) {
 }
 function shutdown() { log('saving & shutting down...'); for (const c of clients.values()) { try { c.ws.close(1001); } catch (e) { } } Store.mark(); Store.flush(); process.exit(0); }
 process.on('SIGINT', shutdown); process.on('SIGTERM', shutdown);
-process.on('uncaughtException', e => { console.error('uncaught', e); });
+process.on('uncaughtException', e => { console.error('uncaught', e); }); process.on('unhandledRejection', e => { console.error('unhandled', e); });
 
 for (const n of cfg.admins) if (!Store.get(n)) log('! admin account "' + n + '" is not registered yet — register it FIRST, otherwise someone else could take that name');
 server.listen(cfg.port, cfg.host, () => {
