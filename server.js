@@ -15,11 +15,11 @@ const { WebSocketServer } = require('ws');
 function readJson(f) { try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch (e) { return {}; } }
 const cfg = Object.assign({
   port: 8080, host: '0.0.0.0', serverName: 'VICE CITY DRIFT', maxPlayers: 16, tickHz: 15,
-  gameFile: '', dataDir: path.join(__dirname, 'data'), allowRegister: true, admins: [], trustProxy: false,
+  gameFile: '', dataDir: path.join(__dirname, 'data'), allowRegister: true, admins: [], adminCode: '', trustProxy: false,
   daySec: 1200, startHour: 17.2, registerPerHourPerIp: 6, badWords: [], spawnProtectSec: 3, sessionDays: 14,
 }, readJson(path.join(__dirname, 'config.json')));
 const E = process.env, truthy = v => /^(1|true|yes|on)$/i.test(String(v));
-if (E.HOST) cfg.host = E.HOST; if (E.DATA_DIR) cfg.dataDir = path.resolve(E.DATA_DIR); if (E.SERVER_NAME) cfg.serverName = E.SERVER_NAME; if (E.TRUST_PROXY !== undefined) cfg.trustProxy = truthy(E.TRUST_PROXY); if (E.ALLOW_REGISTER !== undefined) cfg.allowRegister = truthy(E.ALLOW_REGISTER); if (E.ADMINS) cfg.admins = E.ADMINS.split(',').map(x => x.trim()).filter(Boolean); // env overrides (Docker / systemd)
+if (E.HOST) cfg.host = E.HOST; if (E.DATA_DIR) cfg.dataDir = path.resolve(E.DATA_DIR); if (E.SERVER_NAME) cfg.serverName = E.SERVER_NAME; if (E.TRUST_PROXY !== undefined) cfg.trustProxy = truthy(E.TRUST_PROXY); if (E.ALLOW_REGISTER !== undefined) cfg.allowRegister = truthy(E.ALLOW_REGISTER); if (E.ADMINS) cfg.admins = E.ADMINS.split(',').map(x => x.trim()).filter(Boolean); if (E.ADMIN_CODE) cfg.adminCode = String(E.ADMIN_CODE).trim(); // secret code: type /admin <code> in chat to become admin for the current session // env overrides (Docker / systemd)
 if (process.env.PORT) cfg.port = +process.env.PORT; if (process.env.MAX_PLAYERS) cfg.maxPlayers = +process.env.MAX_PLAYERS; if (process.env.GAME_FILE) cfg.gameFile = process.env.GAME_FILE;
 const GAME_CANDIDATES = [cfg.gameFile, path.join(__dirname, 'public', 'index.html'), path.join(__dirname, '..', 'dist', 'game.html')].filter(Boolean);
 const gamePath = GAME_CANDIDATES.find(f => { try { return fs.statSync(f).isFile(); } catch (e) { return false; } });
@@ -286,16 +286,29 @@ function onMessage(c, raw) {
   }
 }
 function command(c, text) {
-  const [cmd, ...rest] = text.slice(1).split(' '), arg = rest.join(' ').trim(), isAdmin = cfg.admins.map(s => s.toLowerCase()).includes(c.name.toLowerCase());
+  const [cmd, ...rest] = text.slice(1).split(' '), arg = rest.join(' ').trim(), isAdmin = !!c.admin || cfg.admins.map(s => s.toLowerCase()).includes(c.name.toLowerCase());
   switch (cmd.toLowerCase()) {
     case 'w': case 'msg': { const sp = arg.indexOf(' '); if (sp < 0) return sys('ใช้: /w ชื่อ ข้อความ', c); const t = byName(arg.slice(0, sp)); if (!t) return sys('ไม่พบผู้เล่นชื่อนั้น', c); const m = filterBad(cleanText(arg.slice(sp + 1), 140)); send(t, { t: 'chat', id: c.id, name: c.name, m, to: 1 }); send(c, { t: 'chat', id: c.id, name: c.name, m, to: 2, toName: t.name }); return; }
     case 'players': case 'list': return sys('ออนไลน์ ' + clients.size + '/' + cfg.maxPlayers + ': ' + [...clients.values()].map(o => o.name).join(', '), c);
-    case 'help': return sys('คำสั่ง: /w ชื่อ ข้อความ · /players · ' + (isAdmin ? '/kick ชื่อ · /mute ชื่อ · /unmute ชื่อ · /say ข้อความ · /time 0-24 · /rain 0-1' : 'Tab = รายชื่อผู้เล่น'), c);
+    case 'admin': { // /admin <code> — unlocks the admin commands for this connection only (never saved); /admin off — give them up
+      if (arg.toLowerCase() === 'off') { c.admin = false; return sys('ออกจากโหมดแอดมินแล้ว', c); }
+      if (cfg.adminCode.length < 8) return sys('เซิร์ฟเวอร์นี้ยังไม่ได้ตั้งรหัสแอดมิน (ตั้งค่า ADMIN_CODE อย่างน้อย 8 ตัว)', c);
+      if (c.admin) return sys('คุณเป็นแอดมินอยู่แล้ว — พิมพ์ /help ดูคำสั่ง', c);
+      const k = 'adm:' + c.ip; if (tooMany(k)) return sys('ใส่รหัสผิดบ่อยเกินไป รอสักครู่แล้วลองใหม่', c);
+      const h = x => crypto.createHash('sha256').update(String(x)).digest();
+      if (!crypto.timingSafeEqual(h(arg), h(cfg.adminCode))) { fail(k, 5, 300000); log('! wrong admin code from', c.name, c.ip); return sys('รหัสแอดมินไม่ถูกต้อง', c); }
+      c.admin = true; log('* admin mode ON for', c.name); return sys('✔ เปิดโหมดแอดมินแล้ว (ใช้ได้จนกว่าจะออกจากเกม) — พิมพ์ /help ดูคำสั่ง', c);
+    }
+    case 'help': return sys('คำสั่ง: /w ชื่อ ข้อความ · /players · /admin รหัส · ' + (isAdmin ? '/kick ชื่อ · /mute ชื่อ · /unmute ชื่อ · /ban ชื่อ · /unban ชื่อ · /passwd ชื่อ รหัสใหม่ · /say ข้อความ · /time 0-24 · /rain 0-1 · /admin off' : 'Tab = รายชื่อผู้เล่น'), c);
   }
   if (!isAdmin) return sys('ไม่รู้จักคำสั่ง (พิมพ์ /help)', c);
   switch (cmd.toLowerCase()) {
     case 'kick': { const t = byName(arg); if (!t) return sys('ไม่พบผู้เล่น', c); send(t, { t: 'err', code: 'kick', m: 'คุณถูกเตะออกจากเซิร์ฟเวอร์' }); t.ws.close(); return sys(t.name + ' ถูกเตะ'); }
     case 'mute': case 'unmute': { const t = byName(arg); if (!t) return sys('ไม่พบผู้เล่น', c); t.muted = cmd.toLowerCase() === 'mute'; return sys(t.name + (t.muted ? ' ถูกปิดแชต' : ' เปิดแชตแล้ว'), c); }
+    case 'ban': case 'unban': { const u = Store.get(arg); if (!u) return sys('ไม่พบบัญชีชื่อนั้น', c); if (u === c.u) return sys('แบนตัวเองไม่ได้', c); if (cmd.toLowerCase() === 'ban' && cfg.admins.map(x => x.toLowerCase()).includes(u.name.toLowerCase())) return sys('แบนแอดมินประจำไม่ได้', c);
+      u.banned = cmd.toLowerCase() === 'ban'; Store.mark(); const t = byName(arg); if (t && u.banned) { send(t, { t: 'err', code: 'ban', m: 'บัญชีนี้ถูกระงับ' }); t.ws.close(); } log('* ' + cmd.toLowerCase(), u.name, 'by', c.name); return sys(u.name + (u.banned ? ' ถูกแบน' : ' ปลดแบนแล้ว'), c); }
+    case 'passwd': { const sp = arg.indexOf(' '), u = sp > 0 ? Store.get(arg.slice(0, sp)) : null, pw = sp > 0 ? arg.slice(sp + 1).trim() : ''; if (!u || pw.length < 6 || pw.length > 64) return sys('ใช้: /passwd ชื่อ รหัสใหม่ (6-64 ตัว)', c);
+      const salt = crypto.randomBytes(16); u.salt = salt.toString('hex'); u.hash = hashPw(pw, salt).toString('hex'); Store.mark(); Store.flush(); log('* password reset for', u.name, 'by', c.name); return sys('เปลี่ยนรหัสผ่านของ ' + u.name + ' แล้ว', c); }
     case 'say': return sys('📢 ' + arg);
     case 'time': { const h = parseFloat(arg); if (isFinite(h)) { setHour(((h % 24) + 24) % 24); bcast(worldMsg()); } return; }
     case 'rain': { const r = clamp(parseFloat(arg) || 0, 0, 1); world.rainTarget = r; world.nextWeather = Date.now() + 240000; bcast(worldMsg()); return; }

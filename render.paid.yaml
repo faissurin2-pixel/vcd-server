@@ -25,3 +25,5 @@ services:
         value: VICE CITY DRIFT
       - key: VAULT_SECRET
         generateValue: true
+
+# Admin code: add ADMIN_CODE in the Render dashboard (Environment tab) — do not put it in this file.
