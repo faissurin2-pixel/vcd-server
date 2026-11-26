@@ -1,0 +1,27 @@
+# Paid variant: Starter plan + 1 GB persistent disk (accounts survive restarts without relying on the browser vault).
+# To use it: rename this file to render.yaml.
+services:
+  - type: web
+    name: vice-city-drift
+    runtime: node
+    plan: starter
+    region: singapore
+    buildCommand: npm ci --omit=dev
+    startCommand: node server.js
+    healthCheckPath: /api/status
+    autoDeployTrigger: commit
+    disk:
+      name: vcd-data
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: NODE_VERSION
+        value: "20"
+      - key: DATA_DIR
+        value: /var/data
+      - key: TRUST_PROXY
+        value: "true"
+      - key: SERVER_NAME
+        value: VICE CITY DRIFT
+      - key: VAULT_SECRET
+        generateValue: true

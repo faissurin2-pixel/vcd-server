@@ -1,24 +1,22 @@
 # Render Blueprint — VICE CITY DRIFT online server (game page + WebSocket + accounts)
+# FREE plan version: no persistent disk, so accounts are kept as a signed copy in each player's browser ("vault", see README)
+# and restored automatically if Render wipes the server. For a permanent disk use render.paid.yaml instead.
 services:
   - type: web
     name: vice-city-drift
     runtime: node
-    plan: starter            # free plan sleeps after idle and has no persistent disk -> use a paid plan
+    plan: free
     region: singapore        # closest to Thailand
     buildCommand: npm ci --omit=dev
     startCommand: node server.js
     healthCheckPath: /api/status
     autoDeployTrigger: commit
-    disk:
-      name: vcd-data
-      mountPath: /var/data   # accounts + backups live here (survive restarts/redeploys)
-      sizeGB: 1
     envVars:
       - key: NODE_VERSION
         value: "20"
-      - key: DATA_DIR
-        value: /var/data
       - key: TRUST_PROXY
         value: "true"
       - key: SERVER_NAME
         value: VICE CITY DRIFT
+      - key: VAULT_SECRET
+        generateValue: true  # random secret generated once by Render; signs the account copies

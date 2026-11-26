@@ -8012,14 +8012,18 @@ const Net = {
     const v = $('nServer').value.trim(); if (!this.noHost && /^https?:$/.test(location.protocol) && !v) return location.origin;
     let s = v; if (!s) return ''; if (!/^https?:\/\//i.test(s)) s = (location.protocol === 'https:' ? 'https://' : 'http://') + s; return s.replace(/\/+$/, '');
   },
+  // vault: the server signs a copy of the account and we keep it in this browser; if the server forgets the account (host with a wiped disk) the copy restores it at the next login
+  vaultKey(name) { return 'vcd_vault|' + (this.http || '') + '|' + String(name).toLowerCase(); },
+  vaultGet(name) { try { return localStorage.getItem(this.vaultKey(name)) || ''; } catch (e) { return ''; } },
+  vaultPut(name, v) { try { if (typeof v === 'string' && v.length > 20 && v.length < 60000) localStorage.setItem(this.vaultKey(name), v); } catch (e) { } },
   async auth(register) {
     if (this.busy) return; const user = $('nUser').value.trim(), pass = $('nPass').value; this.http = this.base();
     if (!this.http) return this.msg(location.protocol === 'https:' ? 'กรอกที่อยู่เซิร์ฟเวอร์ก่อน (เช่น https://game.example.com)' : 'กรอกที่อยู่เซิร์ฟเวอร์ก่อน (เช่น 192.168.1.5:8080)'); if (location.protocol === 'https:' && /^http:\/\//i.test(this.http)) return this.msg('หน้าเว็บนี้เป็น https — เซิร์ฟเวอร์เกมต้องเป็น https:// ด้วย (ดูวิธีใน README)'); if (user.length < 3) return this.msg('ใส่ชื่อผู้ใช้ (อย่างน้อย 3 ตัว)'); if (pass.length < 6) return this.msg('รหัสผ่านต้องยาวอย่างน้อย 6 ตัว');
     this.busy = true; this.msg(register ? 'กำลังสมัครสมาชิก...' : 'กำลังเข้าสู่ระบบ...', true); $('nLogin').disabled = $('nReg').disabled = true;
     try {
-      const r = await fetch(this.http + (register ? '/api/register' : '/api/login'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ user, pass }) }); const j = await r.json();
+      const vault = this.vaultGet(user); const r = await fetch(this.http + (register ? '/api/register' : '/api/login'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(vault ? { user, pass, vault } : { user, pass }) }); const j = await r.json();
       if (!j.ok) { this.msg(j.err || 'เข้าสู่ระบบไม่สำเร็จ'); return; }
-      this.token = j.token; this.name = j.name; this.profile = j.profile; try { localStorage.setItem('vcd_user', j.name); if (/^https?:\/\//.test(this.http) && (this.noHost || !/^https?:$/.test(location.protocol))) localStorage.setItem('vcd_server', $('nServer').value.trim()); } catch (e) { }
+      this.token = j.token; this.name = j.name; this.profile = j.profile; if (j.vault) this.vaultPut(j.name, j.vault); this.restored = !!j.restored; try { localStorage.setItem('vcd_user', j.name); if (/^https?:\/\//.test(this.http) && (this.noHost || !/^https?:$/.test(location.protocol))) localStorage.setItem('vcd_server', $('nServer').value.trim()); } catch (e) { }
       this.msg('เชื่อมต่อห้องเกม...', true); await this.connect();
     } catch (e) { this.msg('เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ — ตรวจสอบที่อยู่/ว่าเซิร์ฟเวอร์เปิดอยู่'); }
     finally { this.busy = false; $('nLogin').disabled = $('nReg').disabled = false; }
@@ -8038,7 +8042,7 @@ const Net = {
     this.info.clear(); for (const p of m.players) this.info.set(p.id, p); this.roster = m.players.concat([{ id: m.id, name: m.name, k: m.profile.pvpKills, d: m.profile.pvpDeaths, ping: 0 }]);
     if (this.online) { this.clearRemote(); this.addChat({ sys: 1, m: '✔ เชื่อมต่อใหม่สำเร็จ' }); this.recon = 0; $('netlost').classList.add('hidden'); this.applyWorld(m.world, true); return; } // reconnect while playing
     this.pendingEnter = true; const p = this.profile; $('nWho').textContent = this.name; $('nStat').textContent = this.server.name + ' · ออนไลน์ ' + this.roster.length + '/' + this.server.max + ' · เงิน $' + Math.floor(p.money).toLocaleString() + ' · ฆ่า ' + p.pvpKills + ' / ตาย ' + p.pvpDeaths;
-    this.msg('เข้าสู่ระบบสำเร็จ', true); this.setMode('online');
+    this.msg(this.restored ? 'เซิร์ฟเวอร์ลืมบัญชีนี้ (รีเซ็ต) — กู้จากข้อมูลสำรองในเครื่องคุณสำเร็จ' : 'เข้าสู่ระบบสำเร็จ', true); this.setMode('online');
   },
   logout() { this.wantClose = true; try { this.ws && this.ws.close(); } catch (e) { } this.ws = null; this.pendingEnter = false; this.token = null; $('nPass').value = ''; this.msg(''); this.setMode('online'); this.wantClose = false; },
   enter() { // called from a click (so the pointer-lock request is allowed)
@@ -8067,6 +8071,7 @@ const Net = {
       case 'kill': this.onKill(m); break;
       case 'chat': this.addChat(m); break;
       case 'gift': RP.receiveGift(m); break;
+      case 'vault': this.vaultPut(this.name, m.v); break;
       case 'join': this.info.set(m.p.id, m.p); break;
       case 'leave': this.removePlayer(m.id); this.info.delete(m.id); break;
       case 'roster': this.roster = m.p; for (const p of m.p) { this.info.set(p.id, p); const rp = this.players.get(p.id); if (rp) { rp.ping = p.ping; rp.kills = p.k; rp.deaths = p.d; if (rp.netName !== p.name) rp.setName(p.name); } if (p.id === this.id) this.ping = p.ping; } break;

@@ -66,6 +66,35 @@ function hashPw(pw, salt) { return crypto.scryptSync(pw, salt, 64, { N: 16384, r
 function makeUser(name, pw) { const salt = crypto.randomBytes(16); return { name, salt: salt.toString('hex'), hash: hashPw(pw, salt).toString('hex'), created: Date.now(), lastLogin: 0, profile: DEFAULT_PROFILE(), bank: { t: Date.now(), tokens: 40000 }, sus: 0 }; }
 function checkPw(u, pw) { try { const h = hashPw(pw, Buffer.from(u.salt, 'hex')), x = Buffer.from(u.hash, 'hex'); return h.length === x.length && crypto.timingSafeEqual(h, x); } catch (e) { return false; } }
 
+// ---------------------------------------------------------------- vault: a signed copy of the account that lives in the player's own browser
+// Hosts with a throw-away disk (Render free plan, Heroku, ...) wipe accounts.json on every restart. The server therefore hands each player an
+// HMAC-signed snapshot of their account (name, password hash, profile, anti-cheat banks). If the account is unknown at login/register the client
+// sends the snapshot back together with the password; a valid signature + correct password recreates the account. Set VAULT_SECRET (>=16 chars) on
+// such hosts so the signature key survives restarts; on a normal disk the key is generated once and kept in <dataDir>/vault.key.
+const VAULT_KEY = (() => {
+  if (E.VAULT_SECRET && E.VAULT_SECRET.length >= 16) return crypto.createHash('sha256').update(String(E.VAULT_SECRET)).digest();
+  const f = path.join(cfg.dataDir, 'vault.key'); let k = null;
+  try { k = Buffer.from(fs.readFileSync(f, 'utf8').trim(), 'hex'); } catch (e) { }
+  if (!k || k.length < 16) { k = crypto.randomBytes(32); try { fs.writeFileSync(f, k.toString('hex'), { mode: 0o600 }); } catch (e) { } }
+  return k;
+})();
+const vaultSign = body => crypto.createHmac('sha256', VAULT_KEY).update(body).digest('base64url');
+function vaultOf(u) {
+  try { const body = Buffer.from(JSON.stringify({ v: 1, n: u.name, s: u.salt, h: u.hash, c: u.created, t: Date.now(), p: u.profile, b: u.bank, g: u.giftDebt || 0, x: u.xpBank || null, u: u.sus || 0 })).toString('base64url'); return body + '.' + vaultSign(body); } catch (e) { return ''; }
+}
+function vaultRead(str, key) {
+  if (typeof str !== 'string' || str.length < 20 || str.length > 60000) return null; const i = str.indexOf('.'); if (i < 1) return null;
+  const body = str.slice(0, i), a = Buffer.from(str.slice(i + 1)), b = Buffer.from(vaultSign(body)); if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return null;
+  let d; try { d = JSON.parse(Buffer.from(body, 'base64url').toString('utf8')); } catch (e) { return null; }
+  if (!d || d.v !== 1 || typeof d.n !== 'string' || d.n.toLowerCase() !== key || typeof d.s !== 'string' || typeof d.h !== 'string' || !d.p || typeof d.p !== 'object') return null; return d;
+}
+function tryRestore(key, pass, vault) { // recreate a forgotten account from its signed snapshot (needs the right password too)
+  if (!vault || Store.get(key)) return null; const d = vaultRead(vault, key); if (!d) return null;
+  const u = { name: d.n, salt: d.s, hash: d.h, created: d.c || Date.now(), lastLogin: Date.now(), profile: d.p, bank: d.b && typeof d.b.tokens === 'number' ? d.b : { t: Date.now(), tokens: 40000 }, giftDebt: d.g || 0, sus: d.u || 0 };
+  if (d.x) u.xpBank = d.x; if (!checkPw(u, pass)) return null;
+  Store.db.users[key] = u; Store.mark(); Store.flush(); log('↺ account restored from vault', u.name); return u;
+}
+
 // profile validation: the client reports its progress, the server sanity-checks it.
 // Money, bag contents and cars are all valued together ("net worth"); net worth may only rise as fast as a human could plausibly earn it.
 const RP_RATE = 200, RP_BANK = 100000; // $/s allowance, banked burst
@@ -127,7 +156,7 @@ function loadGame() {
   zlib.brotliCompress(raw, { params: { [zlib.constants.BROTLI_PARAM_QUALITY]: 6, [zlib.constants.BROTLI_PARAM_SIZE_HINT]: raw.length } }, (e, b) => { if (!e) { files.br = b; log('game page brotli ready:', (b.length / 1048576).toFixed(1), 'MB'); } });
 }
 loadGame();
-function readBody(req, cb) { let s = '', done = false; req.on('data', c => { s += c; if (s.length > 2048 && !done) { done = true; req.destroy(); } }); req.on('end', () => { if (done) return; try { cb(JSON.parse(s || '{}')); } catch (e) { cb(null); } }); }
+function readBody(req, cb, max = 2048) { let s = '', done = false; req.on('data', c => { s += c; if (s.length > max && !done) { done = true; req.destroy(); } }); req.on('end', () => { if (done) return; try { cb(JSON.parse(s || '{}')); } catch (e) { cb(null); } }); }
 function json(res, code, obj) { const b = JSON.stringify(obj); res.writeHead(code, { 'Content-Type': 'application/json; charset=utf-8', 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'no-store' }); res.end(b); }
 function profileOut(u) { return Object.assign({}, u.profile); }
 const online = new Map(); // account key -> client
@@ -150,18 +179,21 @@ const server = http.createServer((req, res) => {
       const name = cleanText(b.user, 16), pass = b.pass.slice(0, 64), key = name.toLowerCase();
       if (tooMany('ip:' + ip) || tooMany('u:' + key)) return json(res, 429, { ok: false, err: 'ลองผิดบ่อยเกินไป รอสักครู่แล้วลองใหม่' });
       if (reg) {
+        const ru = tryRestore(key, pass, b.vault); // account was forgotten by the server (wiped disk) but the browser still has its signed copy
+        if (ru) return json(res, 200, { ok: true, token: newSession(key), name: ru.name, profile: profileOut(ru), vault: vaultOf(ru), restored: true });
         if (!cfg.allowRegister) return json(res, 403, { ok: false, err: 'เซิร์ฟเวอร์นี้ปิดรับสมัครใหม่' });
         if (!NAME_RE.test(name)) return json(res, 400, { ok: false, err: 'ชื่อผู้ใช้ต้องยาว 3-16 ตัว (ตัวอักษร/ตัวเลข/_/-)' });
         if (pass.length < 6) return json(res, 400, { ok: false, err: 'รหัสผ่านต้องยาวอย่างน้อย 6 ตัว' });
         if (Store.get(name)) return json(res, 409, { ok: false, err: 'ชื่อนี้ถูกใช้แล้ว' });
         const arr = (regLog.get(ip) || []).filter(t => Date.now() - t < 36e5); if (arr.length >= cfg.registerPerHourPerIp) return json(res, 429, { ok: false, err: 'สมัครจาก IP นี้บ่อยเกินไป' }); arr.push(Date.now()); regLog.set(ip, arr);
         const u = makeUser(name, pass); u.lastLogin = Date.now(); Store.db.users[key] = u; Store.mark(); Store.flush(); log('+ new account', name);
-        return json(res, 200, { ok: true, token: newSession(key), name: u.name, profile: profileOut(u), isNew: true });
+        return json(res, 200, { ok: true, token: newSession(key), name: u.name, profile: profileOut(u), vault: vaultOf(u), isNew: true });
       }
-      const u = Store.get(name); if (!u || !checkPw(u, pass)) { fail('ip:' + ip); fail('u:' + key); return json(res, 401, { ok: false, err: 'ชื่อหรือรหัสผ่านไม่ถูกต้อง' }); }
+      let restored = false, u = Store.get(name); if (!u && b.vault) { u = tryRestore(key, pass, b.vault); restored = !!u; }
+      if (!u || !checkPw(u, pass)) { fail('ip:' + ip); fail('u:' + key); return json(res, 401, { ok: false, err: 'ชื่อหรือรหัสผ่านไม่ถูกต้อง' }); }
       if (u.banned) return json(res, 403, { ok: false, err: 'บัญชีนี้ถูกระงับ' });
-      u.lastLogin = Date.now(); Store.mark(); return json(res, 200, { ok: true, token: newSession(key), name: u.name, profile: profileOut(u) });
-    });
+      u.lastLogin = Date.now(); Store.mark(); return json(res, 200, Object.assign({ ok: true, token: newSession(key), name: u.name, profile: profileOut(u), vault: vaultOf(u) }, restored ? { restored: true } : {}));
+    }, 65536);
   }
   res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' }); res.end('not found');
 });
@@ -248,7 +280,7 @@ function onMessage(c, raw) {
       const val = it.p * n, bc = bankOf(c.u), bv = bankOf(v.u); bc.tokens = Math.max(-RP_BANK, bc.tokens - val); c.u.giftDebt = Math.min(RP_BANK * 2, (c.u.giftDebt || 0) + val); bv.tokens = Math.min(RP_BANK * 2, bv.tokens + val); Store.mark();
       send(v, { t: 'gift', from: c.id, name: c.name, id: m.id, n, back: m.back ? 1 : 0 }); log('~ give', c.name, '->', v.name, m.id, 'x' + n); break;
     }
-    case 'save': { if (now - c.lastSave < 2000) return; c.lastSave = now; sanitizeProfile(c.u, m.p); break; }
+    case 'save': { if (now - c.lastSave < 2000) return; c.lastSave = now; sanitizeProfile(c.u, m.p); if (now - (c.lastVault || 0) > 3000) { c.lastVault = now; send(c, { t: 'vault', v: vaultOf(c.u) }); } break; }
     case 'pg': { if (m.n === c.pgN && c.pgT) { c.ping = Math.round(now - c.pgT); c.pgT = 0; } break; }
     case 'bye': { c.ws.close(); break; }
   }
