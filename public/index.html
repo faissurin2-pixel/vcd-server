@@ -215,6 +215,49 @@ u.up{color:#5df08a;text-decoration:none}u.dn{color:#ff6a5a;text-decoration:none}
 .invMenu .mi{background-color:#23262c}.phSend button{background-color:#2a7bf0}
 .rpPanel.phone button{letter-spacing:0;font-family:inherit}.phGrid{padding-top:22px;gap:20px 4px}.phIc b{width:57px;height:57px}
 .phSend button{padding:0;display:flex;align-items:center;justify-content:center;flex:none}
+
+/* ---------------- admin panel (F8) ---------------- */
+.admBadge{position:fixed;left:50%;top:44px;transform:translateX(-50%);font:700 11px "Noto Sans Thai",Tahoma,sans-serif;color:#ffd9d5;background:#4a1511cc;border:1px solid #ff5a4d88;padding:2px 11px;border-radius:10px;z-index:7;letter-spacing:.6px;pointer-events:none}.admBadge.hidden{display:none}
+.rpPanel.adm{width:min(980px,97vw);height:min(680px,94vh);max-height:none;background:rgba(14,16,20,.97);border:1px solid #343944;border-radius:10px;box-shadow:0 20px 70px #000d;overflow:hidden;font-family:"Noto Sans Thai",Tahoma,sans-serif;color:#dfe5ee}
+.rpPanel.adm .shopHead,.rpPanel.adm .shopFoot,.rpPanel.adm #rpTabs{display:none!important}
+.rpPanel.adm #rpBody{padding:0;flex:1;min-height:0;overflow:hidden;display:flex}
+.rpPanel.adm button{box-shadow:none;margin:0;text-shadow:none;background-image:none;letter-spacing:0;font:600 12px "Noto Sans Thai",Tahoma,sans-serif;padding:6px 11px;border-radius:6px;background:#252a35;color:#dfe5ee;border:1px solid #3a4150;cursor:pointer;white-space:nowrap}
+.rpPanel.adm button:hover{background:#2f3645;filter:none}.rpPanel.adm button:active{transform:none}.rpPanel.adm button:disabled{opacity:.35;cursor:default}
+.rpPanel.adm button.danger{background:#3a1a1a;border-color:#7a2f2a;color:#ffb4ac}.rpPanel.adm button.danger:hover{background:#4a2020}
+.rpPanel.adm button.arm{background:#b3261e;border-color:#ff6a58;color:#fff;animation:admPulse .6s infinite alternate}
+@keyframes admPulse{to{filter:brightness(1.3)}}
+.rpPanel.adm button.ok{background:#1f6f5a;border-color:#2fa88a;color:#eafff8}.rpPanel.adm button.ok:hover{background:#26856c}
+.admRoot{flex:1;min-width:0;min-height:0;display:flex;flex-direction:column}
+.admTop{display:flex;align-items:center;gap:16px;padding:14px 18px 10px;border-bottom:1px solid #262b34;background:linear-gradient(#1a1d24,#14171c)}
+.admTtl{font-size:19px;font-weight:800;letter-spacing:.8px;color:#ff8a7e}
+.admStat{flex:1;font-size:12px;color:#9aa4b4}
+.admTabs{display:flex;gap:6px;padding:10px 18px 0;border-bottom:1px solid #262b34}
+.rpPanel.adm .admTab{border-radius:8px 8px 0 0;background:transparent;border:1px solid transparent;border-bottom:none;color:#9aa4b4;padding:8px 16px;font-size:13px}
+.rpPanel.adm .admTab:hover{background:#1c2029;color:#dfe5ee}
+.rpPanel.adm .admTab.on{background:#232833;border-color:#343944;color:#fff;box-shadow:inset 0 2px 0 #ff5a4d}
+.admBody{flex:1;min-height:0;overflow:auto;padding:14px 18px;display:flex;flex-direction:column;gap:12px}
+.admBar{display:flex;align-items:center;gap:14px}
+.admHint{font-size:11.5px;color:#8a93a3}
+.admIn{background:#0d0f13;border:1px solid #343944;color:#e6e9ef;border-radius:6px;padding:7px 10px;font:500 13px "Noto Sans Thai",Tahoma,sans-serif;outline:none;min-width:200px;letter-spacing:0}
+.admIn:focus{border-color:#ff5a4d}.admIn.wide{flex:1;min-width:0}
+.admTblWrap{flex:1;min-height:0;overflow:auto;border:1px solid #262b34;border-radius:8px}
+.admTbl{width:100%;border-collapse:collapse;font-size:12.5px}
+.admTbl th{position:sticky;top:0;background:#1b1f27;color:#8f99aa;font-weight:600;text-align:left;padding:8px 10px;border-bottom:1px solid #2c323d;z-index:1}.admTbl th.r{text-align:right}
+.admTbl td{padding:7px 10px;border-bottom:1px solid #1d2128;vertical-align:middle}
+.admTbl tbody tr:hover{background:#181c23}.admTbl tr.me{background:#1a2230}
+.admTbl td.act{display:flex;gap:5px;justify-content:flex-end;flex-wrap:wrap}.admTbl td.act button{padding:4px 8px;font-size:11.5px}
+.admTbl .dim,.admInfo .dim,.admNote{color:#7c8696}.admTbl .bad{color:#ff8a7e}
+.admTbl tr.pw td{background:#14181f;padding:9px 12px}.admTbl tr.pw .admIn{min-width:180px;margin:0 6px}
+.admEmpty{text-align:center;color:#7c8696;padding:26px!important}
+.bdg{font-style:normal;font-size:10px;font-weight:700;padding:1px 6px;border-radius:8px;margin-left:4px;letter-spacing:.4px}
+.bdg.a{background:#4a1511;color:#ff9c91;border:1px solid #8a342c}.bdg.m{background:#3d3410;color:#ffd96a;border:1px solid #7a6a1f}.bdg.s{background:#17324a;color:#8fd0ff;border:1px solid #2a5a82}
+.admCard{background:#171a21;border:1px solid #2a303b;border-radius:10px;padding:14px 16px;display:flex;flex-direction:column;gap:10px}
+.admCard h4{margin:0;font-size:14px;color:#f1f4f9;letter-spacing:.3px}
+.admRow{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.admRow.q{gap:8px}
+.admRow input[type=range]{flex:1;min-width:160px;accent-color:#ff5a4d}.admVal{min-width:56px;text-align:right;font-size:15px;color:#ffd9d5;font-variant-numeric:tabular-nums}
+.admNote{margin:0;font-size:12px;line-height:1.55}.admInfo{margin:0;font-size:12.5px;line-height:1.6;color:#c7cfdb}
+.admMsg{padding:9px 18px;border-top:1px solid #262b34;background:#12151a;font-size:12.5px;color:#9fe0c8;min-height:18px}
+.admMsg.flash{animation:admFlash .9s}@keyframes admFlash{from{background:#1f3a31;color:#fff}to{background:#12151a}}
 </style></head><body><canvas id="game"></canvas>
 <div id="hud" class="hidden">
   <div id="topright"><div id="clock"></div><div id="money">$0</div><div id="stars"><i>★</i><i>★</i><i>★</i><i>★</i><i>★</i></div><div id="weapon"><span id="wname"></span><b id="wammo"></b></div></div>
@@ -8038,13 +8081,14 @@ const Net = {
     });
   },
   onWelcome(m) {
+    this.admin = !!m.admin; AdminUI.sync();
     this.id = m.id; this.name = m.name; this.server = m.server; this.world = m.world; if (!this.online) this.profile = m.profile;
     this.info.clear(); for (const p of m.players) this.info.set(p.id, p); this.roster = m.players.concat([{ id: m.id, name: m.name, k: m.profile.pvpKills, d: m.profile.pvpDeaths, ping: 0 }]);
     if (this.online) { this.clearRemote(); this.addChat({ sys: 1, m: '✔ เชื่อมต่อใหม่สำเร็จ' }); this.recon = 0; $('netlost').classList.add('hidden'); this.applyWorld(m.world, true); return; } // reconnect while playing
     this.pendingEnter = true; const p = this.profile; $('nWho').textContent = this.name; $('nStat').textContent = this.server.name + ' · ออนไลน์ ' + this.roster.length + '/' + this.server.max + ' · เงิน $' + Math.floor(p.money).toLocaleString() + ' · ฆ่า ' + p.pvpKills + ' / ตาย ' + p.pvpDeaths;
     this.msg(this.restored ? 'เซิร์ฟเวอร์ลืมบัญชีนี้ (รีเซ็ต) — กู้จากข้อมูลสำรองในเครื่องคุณสำเร็จ' : 'เข้าสู่ระบบสำเร็จ', true); this.setMode('online');
   },
-  logout() { this.wantClose = true; try { this.ws && this.ws.close(); } catch (e) { } this.ws = null; this.pendingEnter = false; this.token = null; $('nPass').value = ''; this.msg(''); this.setMode('online'); this.wantClose = false; },
+  logout() { this.admin = false; AdminUI.sync(); this.wantClose = true; try { this.ws && this.ws.close(); } catch (e) { } this.ws = null; this.pendingEnter = false; this.token = null; $('nPass').value = ''; this.msg(''); this.setMode('online'); this.wantClose = false; },
   enter() { // called from a click (so the pointer-lock request is allowed)
     if (!this.pendingEnter || !this.profile) return; const p = this.profile, P = Game.player; this.pendingEnter = false;
     Game.money = p.money; P.weapons = { fists: { mag: 0, reserve: 0 } }; for (const k in p.weapons) if (WeaponDefs[k]) P.weapons[k] = { mag: p.weapons[k][0], reserve: p.weapons[k][1] };
@@ -8072,6 +8116,9 @@ const Net = {
       case 'chat': this.addChat(m); break;
       case 'gift': RP.receiveGift(m); break;
       case 'vault': this.vaultPut(this.name, m.v); break;
+      case 'adm': this.admin = !!m.on; AdminUI.sync(); if (m.on) this.addChat({ sys: 1, m: '🛡 โหมดแอดมินเปิดอยู่ — กด F8 เปิดหน้าจอแอดมิน' }); break;
+      case 'alist': AdminUI.onList(m); break;
+      case 'strip': AdminUI.strip(); break;
       case 'join': this.info.set(m.p.id, m.p); break;
       case 'leave': this.removePlayer(m.id); this.info.delete(m.id); break;
       case 'roster': this.roster = m.p; for (const p of m.p) { this.info.set(p.id, p); const rp = this.players.get(p.id); if (rp) { rp.ping = p.ping; rp.kills = p.k; rp.deaths = p.d; if (rp.netName !== p.name) rp.setName(p.name); } if (p.id === this.id) this.ping = p.ping; } break;
@@ -9005,6 +9052,148 @@ const RPWorld = {
   }
 };
 
+// ---- 07f_admin.js
+// ================================================================
+//  ADMIN — in-game admin panel (F8). Shown only to accounts the server marked as admin ({t:'adm'} / welcome.admin).
+//  Every button just sends an ordinary chat command (/kick, /ban, /time ...), so the server stays the only authority.
+// ================================================================
+const AdminUI = {
+  tab: 'players', list: null, filter: '', isOpen: false, busy: false, armed: null, editing: false, timer: 0, R: null,
+  TABS: [{ id: 'players', label: '👥 ผู้เล่น' }, { id: 'world', label: '🌦 โลก & ประกาศ' }, { id: 'acc', label: '🔎 บัญชี' }, { id: 'guns', label: '🔫 ปืน' }],
+  init() {
+    this.badge = hx('div', 'admBadge hidden', '🛡 ADMIN · กด F8'); document.body.appendChild(this.badge);
+    window.addEventListener('keydown', e => {
+      if (e.code !== 'F8' || this.isOpen) return; // while open, RPUI closes the panel on F8 / Esc
+      if (!Net.online || !Net.admin || Game.state !== 'play' || Net.chatOpen || RPUI.open) return;
+      const t = e.target; if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA')) return; e.preventDefault(); this.show();
+    });
+    const ac = Net.addChat; Net.addChat = function (m) { const r = ac.apply(this, arguments); if (m && m.sys && AdminUI.isOpen) AdminUI.say(m.m); return r; }; // server replies to commands land in the panel too
+    setInterval(() => { this.badge.classList.toggle('hidden', !(Net.online && Net.admin)); if (!Net.admin && this.isOpen) RPUI.hide(); }, 800);
+  },
+  sync() { this.badge.classList.toggle('hidden', !(Net.online && Net.admin)); if (!Net.admin && this.isOpen) RPUI.hide(); },
+  show() {
+    if (RPUI.open) return; this.isOpen = true; this.list = null; this.armed = null; this.editing = false;
+    RPUI.show({ cls: 'adm', key: 'F8', title: '', onClose: () => { this.isOpen = false; clearInterval(this.timer); }, render: B => this.render(B) });
+    this.poll(); clearInterval(this.timer); this.timer = setInterval(() => this.poll(), 2500);
+  },
+  poll() { if (this.isOpen) Net.send({ t: 'alist' }); },
+  cmd(s) { if (this.busy) { this.say('รอสักครู่ แล้วลองใหม่...'); return false; } this.busy = true; setTimeout(() => { this.busy = false; }, 700); Net.send({ t: 'chat', m: s }); this.say('ส่งคำสั่ง ' + s.split(' ')[0] + ' ...'); setTimeout(() => this.poll(), 500); return true; },
+  say(t) { if (!this.R) return; const m = this.R.querySelector('.admMsg'); if (m) { m.textContent = t; m.classList.remove('flash'); void m.offsetWidth; m.classList.add('flash'); } },
+  // two-step button: the first click arms it, the second (within 3 s) runs it
+  arm(btn, label, fn) {
+    const orig = btn.innerHTML; btn.classList.add('danger'); btn.onclick = () => {
+      if (btn._armed) { clearTimeout(btn._t); btn._armed = false; btn.classList.remove('arm'); btn.innerHTML = orig; fn(); return; }
+      btn._armed = true; btn.classList.add('arm'); btn.innerHTML = 'ยืนยัน?'; btn._t = setTimeout(() => { btn._armed = false; btn.classList.remove('arm'); btn.innerHTML = orig; }, 3000);
+    };
+  },
+  render(B) {
+    B.innerHTML = ''; const R = this.R = hx('div', 'admRoot');
+    R.innerHTML = '<div class="admTop"><div class="admTtl">🛡 ADMIN PANEL</div><div class="admStat"></div><button class="admX">ปิด · Esc</button></div><div class="admTabs"></div><div class="admBody"></div><div class="admMsg">พร้อมใช้งาน — ทุกคำสั่งถูกตรวจสิทธิ์ที่เซิร์ฟเวอร์</div>';
+    B.appendChild(R); R.querySelector('.admX').onclick = () => RPUI.hide(); this.drawTabs(); this.drawTab(); this.drawStat();
+  },
+  drawTabs() {
+    const T = this.R.querySelector('.admTabs'); T.innerHTML = '';
+    for (const t of this.TABS) { const b = hx('button', 'admTab' + (t.id === this.tab ? ' on' : ''), t.label); b.onclick = () => { this.tab = t.id; this.armed = null; this.editing = false; this.drawTabs(); this.drawTab(); Sound.click(); }; T.appendChild(b); }
+  },
+  drawStat() {
+    const s = this.R && this.R.querySelector('.admStat'); if (!s) return; const L = this.list, mx = Net.server ? Net.server.max : '?';
+    s.textContent = L ? 'ออนไลน์ ' + L.p.length + '/' + mx + '  ·  บัญชีทั้งหมด ' + L.n + '  ·  ปืน epoch ' + L.ep : 'กำลังโหลด...';
+  },
+  onList(m) {
+    this.list = m; if (!this.isOpen || !this.R) return; this.drawStat();
+    if (this.tab === 'players' && !this.editing) this.drawPlayers(); else if (this.tab === 'guns') this.drawGunInfo(); else if (this.tab === 'acc') this.drawNames();
+  },
+  drawTab() {
+    const Bd = this.R.querySelector('.admBody'); Bd.innerHTML = ''; Bd.scrollTop = 0; this.body = Bd;
+    if (this.tab === 'players') this.tabPlayers(Bd); else if (this.tab === 'world') this.tabWorld(Bd); else if (this.tab === 'acc') this.tabAcc(Bd); else this.tabGuns(Bd);
+  },
+  // ---------------------------------------------------------------- players
+  tabPlayers(Bd) {
+    const bar = hx('div', 'admBar', '<input class="admIn" placeholder="🔍 ค้นหาชื่อผู้เล่น" maxlength="16" spellcheck="false"><span class="admHint">ปุ่มแดง (แบน / ลบปืน) กดสองครั้งเพื่อยืนยัน</span>');
+    const inp = bar.querySelector('input'); inp.value = this.filter; inp.addEventListener('keydown', e => e.stopPropagation()); inp.oninput = () => { this.filter = inp.value.trim().toLowerCase(); this.drawPlayers(); };
+    const wrap = hx('div', 'admTblWrap'); this.tbl = hx('table', 'admTbl'); this.tb = null; wrap.appendChild(this.tbl); Bd.appendChild(bar); Bd.appendChild(wrap); this.drawPlayers();
+  },
+  drawPlayers() { // rows are updated in place (keyed by player id) so a click is never lost to a re-render
+    const T = this.tbl; if (!T) return; const L = this.list;
+    if (!this.tb || this.tb.parentNode !== T) { T.innerHTML = '<thead><tr><th>#</th><th>ผู้เล่น</th><th>ปิง</th><th>เงิน</th><th>ปืน</th><th>ฆ่า/ตาย</th><th>เล่นมา</th><th class="r">จัดการ</th></tr></thead>'; this.tb = hx('tbody'); T.appendChild(this.tb); this.rows = new Map(); }
+    const tb = this.tb, note = txt => { this.rows.clear(); tb.innerHTML = '<tr><td colspan="8" class="admEmpty">' + txt + '</td></tr>'; };
+    if (!L) return note('กำลังโหลดรายชื่อ...');
+    const list = L.p.filter(p => !this.filter || p.name.toLowerCase().includes(this.filter)).sort((a, b) => a.id - b.id);
+    if (!list.length) return note('ไม่พบผู้เล่น');
+    if (!this.rows.size) tb.innerHTML = '';
+    const seen = new Set(); let idx = 0;
+    for (const p of list) {
+      seen.add(p.id); let r = this.rows.get(p.id); if (!r) { r = this.makeRow(); this.rows.set(p.id, r); } this.updRow(r, p);
+      let at = tb.children[idx]; if (at !== r.tr) tb.insertBefore(r.tr, at || null); idx++; if (r.tr.nextSibling && r.tr.nextSibling.classList && r.tr.nextSibling.classList.contains('pw')) idx++;
+    }
+    for (const [id, r] of this.rows) if (!seen.has(id)) { if (r.tr.nextSibling && r.tr.nextSibling.classList && r.tr.nextSibling.classList.contains('pw')) r.tr.nextSibling.remove(); r.tr.remove(); this.rows.delete(id); }
+  },
+  makeRow() { const tr = hx('tr'), tds = []; for (let k = 0; k < 7; k++) { const td = hx('td'); tr.appendChild(td); tds.push(td); } const act = hx('td', 'act'); tr.appendChild(act); return { tr, tds, act, sig: null }; },
+  updRow(r, p) {
+    const me = p.id === Net.id, T = r.tds; r.tr.className = me ? 'me' : '';
+    const tm = p.ps >= 3600 ? Math.floor(p.ps / 3600) + ' ชม. ' + Math.floor(p.ps % 3600 / 60) + ' น.' : Math.floor(p.ps / 60) + ' น.';
+    T[0].className = 'dim'; T[0].textContent = p.id; T[1].innerHTML = '<b>' + escH(p.name) + '</b>' + (p.adm ? ' <i class="bdg a">ADMIN</i>' : '') + (p.mu ? ' <i class="bdg m">ปิดแชต</i>' : '') + (me ? ' <i class="bdg s">คุณ</i>' : '');
+    T[2].className = p.ping > 200 ? 'bad' : ''; T[2].textContent = p.ping; T[3].textContent = fmtM(p.money); T[4].title = p.w.join(', '); T[4].innerHTML = p.w.length ? '🔫 ' + p.w.length : '<span class="dim">—</span>'; T[5].textContent = p.k + ' / ' + p.d; T[6].className = 'dim'; T[6].textContent = tm;
+    const sig = me + '|' + p.mu + '|' + (p.w.length ? 1 : 0); if (sig === r.sig) return; r.sig = sig; const td = r.act; td.innerHTML = ''; if (me) return;
+    const mk = (txt, fn, title) => { const b = hx('button', '', txt); if (title) b.title = title; b.onclick = () => { fn(b); Sound.click(); }; td.appendChild(b); return b; };
+    mk(p.mu ? '🔊 เปิดแชต' : '🔇 ปิดแชต', () => this.cmd('/' + (p.mu ? 'unmute ' : 'mute ') + p.name));
+    mk('👢 เตะ', () => this.cmd('/kick ' + p.name));
+    const g = mk('🔫 ลบปืน', () => { }, 'ลบปืนทั้งหมดของคนนี้'); this.arm(g, '', () => this.cmd('/clearguns ' + p.name)); if (!p.w.length) g.disabled = true;
+    mk('🔑', () => this.pwRow(r.tr, p), 'ตั้งรหัสผ่านใหม่');
+    const bn = mk('⛔ แบน', () => { }); this.arm(bn, '', () => this.cmd('/ban ' + p.name));
+  },
+  pwRow(tr, p) { // inline password editor under the row
+    if (tr.nextSibling && tr.nextSibling.classList && tr.nextSibling.classList.contains('pw')) { tr.nextSibling.remove(); this.editing = false; return; }
+    this.editing = true; const r = hx('tr', 'pw'), td = hx('td'); td.colSpan = 8; td.innerHTML = '<span>ตั้งรหัสผ่านใหม่ให้ <b>' + escH(p.name) + '</b> (6–64 ตัว):</span> <input class="admIn" maxlength="64" spellcheck="false" autocomplete="off"> <button class="ok">บันทึก</button> <button class="cancel">ยกเลิก</button>';
+    r.appendChild(td); tr.after(r); const i = td.querySelector('input'); i.addEventListener('keydown', e => { e.stopPropagation(); if (e.code === 'Enter') td.querySelector('.ok').click(); }); i.focus();
+    td.querySelector('.cancel').onclick = () => { r.remove(); this.editing = false; };
+    td.querySelector('.ok').onclick = () => { const v = i.value.trim(); if (v.length < 6) { this.say('รหัสผ่านต้องยาวอย่างน้อย 6 ตัว'); return; } if (this.cmd('/passwd ' + p.name + ' ' + v)) { r.remove(); this.editing = false; } };
+  },
+  // ---------------------------------------------------------------- world + announce
+  tabWorld(Bd) {
+    const hh = v => { const h = Math.floor(v), m = Math.round((v - h) * 60); return String(h % 24).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0'); };
+    const card = (t, html) => { const c = hx('div', 'admCard', '<h4>' + t + '</h4>' + html); Bd.appendChild(c); return c; };
+    const c1 = card('🕒 เวลาในเกม', '<div class="admRow"><input type="range" min="0" max="24" step="0.25"><b class="admVal"></b><button class="ok">ตั้งเวลา</button></div><div class="admRow q"><button data-v="6">🌅 06:00</button><button data-v="12">☀️ 12:00</button><button data-v="18">🌇 18:00</button><button data-v="0">🌙 00:00</button></div>');
+    const r1 = c1.querySelector('input'), v1 = c1.querySelector('.admVal'); r1.value = Atmos.time % 24; v1.textContent = hh(+r1.value); r1.oninput = () => { v1.textContent = hh(+r1.value); };
+    c1.querySelector('.ok').onclick = () => { this.cmd('/time ' + (+r1.value)); Sound.click(); };
+    c1.querySelectorAll('.q button').forEach(b => { b.onclick = () => { r1.value = b.dataset.v; v1.textContent = hh(+r1.value); this.cmd('/time ' + b.dataset.v); Sound.click(); }; });
+    const c2 = card('🌧 ฝน', '<div class="admRow"><input type="range" min="0" max="1" step="0.05"><b class="admVal"></b><button class="ok">ตั้งฝน</button></div><div class="admRow q"><button data-v="0">☀️ ไม่มีฝน</button><button data-v="0.4">🌦 ฝนเบา</button><button data-v="1">⛈ ฝนหนัก</button></div>');
+    const r2 = c2.querySelector('input'), v2 = c2.querySelector('.admVal'); r2.value = Atmos.rainTarget || 0; v2.textContent = Math.round(+r2.value * 100) + '%'; r2.oninput = () => { v2.textContent = Math.round(+r2.value * 100) + '%'; };
+    c2.querySelector('.ok').onclick = () => { this.cmd('/rain ' + (+r2.value)); Sound.click(); };
+    c2.querySelectorAll('.q button').forEach(b => { b.onclick = () => { r2.value = b.dataset.v; v2.textContent = Math.round(+r2.value * 100) + '%'; this.cmd('/rain ' + b.dataset.v); Sound.click(); }; });
+    const c3 = card('📢 ประกาศถึงทุกคน', '<div class="admRow"><input class="admIn wide" maxlength="120" placeholder="พิมพ์ข้อความประกาศ..." spellcheck="false"><button class="ok">📢 ส่ง</button></div>');
+    const i3 = c3.querySelector('input'); i3.addEventListener('keydown', e => { e.stopPropagation(); if (e.code === 'Enter') c3.querySelector('.ok').click(); });
+    c3.querySelector('.ok').onclick = () => { const t = i3.value.trim(); if (!t) return; if (this.cmd('/say ' + t)) i3.value = ''; };
+  },
+  // ---------------------------------------------------------------- accounts by name (also offline ones)
+  tabAcc(Bd) {
+    const c = hx('div', 'admCard', '<h4>🔎 จัดการบัญชีด้วยชื่อ (ออนไลน์หรือออฟไลน์ก็ได้)</h4><div class="admRow"><input class="admIn wide" id="admName" maxlength="16" list="admNames" placeholder="ชื่อบัญชี" spellcheck="false" autocomplete="off"><datalist id="admNames"></datalist></div><div class="admRow q"><button class="ban">⛔ แบน</button><button class="unban">✅ ปลดแบน</button><button class="guns">🔫 ลบปืน</button><button class="mute">🔇 ปิดแชต</button><button class="unmute">🔊 เปิดแชต</button></div>'
+      + '<div class="admRow"><input class="admIn wide" id="admPw" maxlength="64" placeholder="รหัสผ่านใหม่ (6–64 ตัว)" spellcheck="false" autocomplete="off"><button class="pw">🔑 ตั้งรหัสผ่านใหม่</button></div><p class="admNote">ปิดแชต/เปิดแชต ใช้ได้เฉพาะคนที่ออนไลน์อยู่ · การแบนบนโฮสต์ที่ล้างข้อมูลได้ (Render ฟรี) จะหายเมื่อเซิร์ฟเวอร์รีเซ็ต</p>');
+    Bd.appendChild(c); c.querySelectorAll('input').forEach(i => i.addEventListener('keydown', e => e.stopPropagation()));
+    const nm = () => c.querySelector('#admName').value.trim(), need = () => { const n = nm(); if (!n) this.say('ใส่ชื่อบัญชีก่อน'); return n; };
+    this.arm(c.querySelector('.ban'), '', () => { const n = need(); if (n) this.cmd('/ban ' + n); }); this.arm(c.querySelector('.guns'), '', () => { const n = need(); if (n) this.cmd('/clearguns ' + n); });
+    c.querySelector('.unban').onclick = () => { const n = need(); if (n) this.cmd('/unban ' + n); }; c.querySelector('.mute').onclick = () => { const n = need(); if (n) this.cmd('/mute ' + n); }; c.querySelector('.unmute').onclick = () => { const n = need(); if (n) this.cmd('/unmute ' + n); };
+    c.querySelector('.pw').onclick = () => { const n = need(), p = c.querySelector('#admPw').value.trim(); if (!n) return; if (p.length < 6) { this.say('รหัสผ่านต้องยาวอย่างน้อย 6 ตัว'); return; } if (this.cmd('/passwd ' + n + ' ' + p)) c.querySelector('#admPw').value = ''; };
+    this.drawNames();
+  },
+  drawNames() { const d = this.R && this.R.querySelector('#admNames'); if (!d || !this.list) return; d.innerHTML = this.list.p.map(p => '<option value="' + escH(p.name) + '">').join(''); },
+  // ---------------------------------------------------------------- guns
+  tabGuns(Bd) {
+    const c = hx('div', 'admCard', '<h4>🔫 ลบปืนทุกบัญชีตอนนี้</h4><p class="admNote">ผู้เล่นที่ออนไลน์จะถูกลบปืนทันที ส่วนบัญชีที่ออฟไลน์หรือกู้จากสำเนาในเครื่อง จะถูกลบตอนล็อกอินครั้งถัดไป ผู้เล่นซื้อปืนใหม่ได้ตามปกติหลังจากนั้น</p><div class="admRow"><button class="allguns">🔫 ลบปืนทุกบัญชี</button></div><p class="admInfo"></p>');
+    Bd.appendChild(c); this.arm(c.querySelector('.allguns'), '', () => this.cmd('/clearguns')); this.gunInfo = c.querySelector('.admInfo'); this.drawGunInfo();
+  },
+  drawGunInfo() {
+    const e = this.gunInfo; if (!e) return; const L = this.list; if (!L) { e.textContent = 'กำลังโหลด...'; return; }
+    const armed = L.p.filter(p => p.w.length).length;
+    e.innerHTML = 'ตอนนี้มีผู้เล่นถือปืนอยู่ <b>' + armed + '</b> จาก ' + L.p.length + ' คนที่ออนไลน์ · รอบการลบปืน (epoch) = <b>' + L.ep + '</b><br><span class="dim">โฮสต์ที่ล้างข้อมูลทุกครั้งที่รีสตาร์ต (Render ฟรี): หลังกดลบปืน ให้ไปตั้ง WEAPON_EPOCH ใน Environment ของบริการเป็นเลข epoch ล่าสุด' + (L.ep ? ' (ตอนนี้คือ ' + L.ep + ')' : '') + ' ไม่งั้นสำเนาบัญชีเก่าในเครื่องผู้เล่นอาจพาปืนกลับมาหลังรีเซ็ต</span>';
+  },
+  // ---------------------------------------------------------------- the player's own client: guns removed by an admin
+  strip() {
+    const P = Game.player; if (!P) return; P.weapons = { fists: { mag: 0, reserve: 0 } }; try { P.equip('fists'); } catch (e) { P.cur = 'fists'; P.weaponKey = 'fists'; }
+    Game.notify('🔫 ปืนทั้งหมดถูกแอดมินลบออกจากบัญชีของคุณ', 'info'); Net.saveProfile(); if (RPUI.open && RPUI.cfg && RPUI.cfg.cls === 'inv') RPUI.render();
+  },
+};
+
 // ---- 08_ui.js
 // ============================================================================
 //  HUD, radar, full map, menus, save
@@ -9244,7 +9433,7 @@ function boot() {
   buildSky(); FX.init(); Skids.init(); buildTerrain(); buildCity(); buildOuterWorld(); buildRain(); Combat.init(); Pickups.init(); Markers.init(); applyQuality();
   const P = new Player(); Game.player = P; const sp = SPAWN_P(); P.place(sp[0], sp[1], PI * 0.5); Cam.yaw = P.h; P.human.update(0.016, camera.position);
     P.human.setSkin(null); // the player is always Carl Johnson (CJ); the other character skins are only used by NPCs
-  Missions.init(); MilBase.init(); Shops.init(); RPUI.init(); RPWorld.init(); buildMapImage(); scatterPickups(); applySave(saved); HUD.init(); Net.init(); Atmos.time = saved ? Atmos.time : 17.2;
+  Missions.init(); MilBase.init(); Shops.init(); RPUI.init(); AdminUI.init(); RPWorld.init(); buildMapImage(); scatterPickups(); applySave(saved); HUD.init(); Net.init(); Atmos.time = saved ? Atmos.time : 17.2;
   $('sQuality').value = Settings.quality; $('sSens').value = Settings.sens; $('sVol').value = Settings.volume;
   $('sQuality').onchange = e => { Settings.quality = e.target.value; applyQuality(); Game.save(); }; $('sSens').oninput = e => { Settings.sens = +e.target.value; }; $('sVol').oninput = e => Sound.setVolume(+e.target.value); $('sTime').onchange = e => { Atmos.daySec = +e.target.value; };
   $('bResume').onclick = () => { Game.paused = false; $('pause').classList.add('hidden'); lockPointer(); }; $('bSave').onclick = () => { Game.save(); Game.notify('GAME SAVED', 'info'); };

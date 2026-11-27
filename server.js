@@ -15,11 +15,11 @@ const { WebSocketServer } = require('ws');
 function readJson(f) { try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch (e) { return {}; } }
 const cfg = Object.assign({
   port: 8080, host: '0.0.0.0', serverName: 'VICE CITY DRIFT', maxPlayers: 16, tickHz: 15,
-  gameFile: '', dataDir: path.join(__dirname, 'data'), allowRegister: true, admins: [], adminCode: '', trustProxy: false,
+  gameFile: '', dataDir: path.join(__dirname, 'data'), allowRegister: true, admins: [], adminCode: '', weaponEpoch: 0, trustProxy: false,
   daySec: 1200, startHour: 17.2, registerPerHourPerIp: 6, badWords: [], spawnProtectSec: 3, sessionDays: 14,
 }, readJson(path.join(__dirname, 'config.json')));
 const E = process.env, truthy = v => /^(1|true|yes|on)$/i.test(String(v));
-if (E.HOST) cfg.host = E.HOST; if (E.DATA_DIR) cfg.dataDir = path.resolve(E.DATA_DIR); if (E.SERVER_NAME) cfg.serverName = E.SERVER_NAME; if (E.TRUST_PROXY !== undefined) cfg.trustProxy = truthy(E.TRUST_PROXY); if (E.ALLOW_REGISTER !== undefined) cfg.allowRegister = truthy(E.ALLOW_REGISTER); if (E.ADMINS) cfg.admins = E.ADMINS.split(',').map(x => x.trim()).filter(Boolean); if (E.ADMIN_CODE) cfg.adminCode = String(E.ADMIN_CODE).trim(); // secret code: type /admin <code> in chat to become admin for the current session // env overrides (Docker / systemd)
+if (E.HOST) cfg.host = E.HOST; if (E.DATA_DIR) cfg.dataDir = path.resolve(E.DATA_DIR); if (E.SERVER_NAME) cfg.serverName = E.SERVER_NAME; if (E.TRUST_PROXY !== undefined) cfg.trustProxy = truthy(E.TRUST_PROXY); if (E.ALLOW_REGISTER !== undefined) cfg.allowRegister = truthy(E.ALLOW_REGISTER); if (E.ADMINS) cfg.admins = E.ADMINS.split(',').map(x => x.trim()).filter(Boolean); if (E.ADMIN_CODE) cfg.adminCode = String(E.ADMIN_CODE).trim(); if (E.WEAPON_EPOCH) cfg.weaponEpoch = Math.max(0, parseInt(E.WEAPON_EPOCH, 10) || 0); // secret code: type /admin <code> in chat to become admin for the current session // env overrides (Docker / systemd)
 if (process.env.PORT) cfg.port = +process.env.PORT; if (process.env.MAX_PLAYERS) cfg.maxPlayers = +process.env.MAX_PLAYERS; if (process.env.GAME_FILE) cfg.gameFile = process.env.GAME_FILE;
 const GAME_CANDIDATES = [cfg.gameFile, path.join(__dirname, 'public', 'index.html'), path.join(__dirname, '..', 'dist', 'game.html')].filter(Boolean);
 const gamePath = GAME_CANDIDATES.find(f => { try { return fs.statSync(f).isFile(); } catch (e) { return false; } });
@@ -48,6 +48,14 @@ const Store = {
   mark() { this.dirty = true; },
 };
 Store.load();
+// weapon reset epoch: every account remembers the epoch it was last "cleaned" at. Raising WEAPON_EPOCH (env) or running /clearguns takes all
+// weapons from every account -- online players at once, offline / vault-restored accounts at their next login. State file keeps the live value on disk hosts.
+const STATE_FILE = path.join(cfg.dataDir, 'state.json');
+try { const st = JSON.parse(fs.readFileSync(STATE_FILE, 'utf8')); if (st && st.weaponEpoch > cfg.weaponEpoch) cfg.weaponEpoch = st.weaponEpoch | 0; } catch (e) { }
+function saveState() { try { fs.writeFileSync(STATE_FILE, JSON.stringify({ weaponEpoch: cfg.weaponEpoch })); } catch (e) { } }
+function stripWeapons(u) { const p = u.profile, n = p.weapons && typeof p.weapons === 'object' ? Object.keys(p.weapons).length : 0; p.weapons = {}; p.cur = 'fists'; u.wEpoch = cfg.weaponEpoch; Store.mark(); return n; }
+function epochCheck(u) { if ((u.wEpoch | 0) < cfg.weaponEpoch) { const n = stripWeapons(u); log('~ weapons removed (epoch ' + cfg.weaponEpoch + ') from', u.name, '(' + n + ')'); return true; } return false; }
+for (const k in Store.db.users) epochCheck(Store.db.users[k]);
 // accounts made before the RP economy: everybody restarts from $0 as a newbie (weapons / stats are kept)
 for (const k in Store.db.users) { const pr = Store.db.users[k].profile; if (pr && !pr.rp) { pr.money = 0; pr.rp = emptyRP(); pr.pos = NEWBIE_POS.slice(); Store.mark(); } }
 setInterval(() => Store.flush(), 4000).unref();
@@ -63,7 +71,7 @@ function backupAccounts() {
 backupAccounts(); setInterval(() => { Store.flush(); backupAccounts(); }, 6 * 3600 * 1000).unref();
 
 function hashPw(pw, salt) { return crypto.scryptSync(pw, salt, 64, { N: 16384, r: 8, p: 1 }); }
-function makeUser(name, pw) { const salt = crypto.randomBytes(16); return { name, salt: salt.toString('hex'), hash: hashPw(pw, salt).toString('hex'), created: Date.now(), lastLogin: 0, profile: DEFAULT_PROFILE(), bank: { t: Date.now(), tokens: 40000 }, sus: 0 }; }
+function makeUser(name, pw) { const salt = crypto.randomBytes(16); return { name, salt: salt.toString('hex'), hash: hashPw(pw, salt).toString('hex'), created: Date.now(), lastLogin: 0, profile: DEFAULT_PROFILE(), bank: { t: Date.now(), tokens: 40000 }, sus: 0, wEpoch: cfg.weaponEpoch }; }
 function checkPw(u, pw) { try { const h = hashPw(pw, Buffer.from(u.salt, 'hex')), x = Buffer.from(u.hash, 'hex'); return h.length === x.length && crypto.timingSafeEqual(h, x); } catch (e) { return false; } }
 
 // ---------------------------------------------------------------- vault: a signed copy of the account that lives in the player's own browser
@@ -80,7 +88,7 @@ const VAULT_KEY = (() => {
 })();
 const vaultSign = body => crypto.createHmac('sha256', VAULT_KEY).update(body).digest('base64url');
 function vaultOf(u) {
-  try { const body = Buffer.from(JSON.stringify({ v: 1, n: u.name, s: u.salt, h: u.hash, c: u.created, t: Date.now(), p: u.profile, b: u.bank, g: u.giftDebt || 0, x: u.xpBank || null, u: u.sus || 0 })).toString('base64url'); return body + '.' + vaultSign(body); } catch (e) { return ''; }
+  try { const body = Buffer.from(JSON.stringify({ v: 1, n: u.name, s: u.salt, h: u.hash, c: u.created, t: Date.now(), p: u.profile, b: u.bank, g: u.giftDebt || 0, x: u.xpBank || null, u: u.sus || 0, e: u.wEpoch | 0 })).toString('base64url'); return body + '.' + vaultSign(body); } catch (e) { return ''; }
 }
 function vaultRead(str, key) {
   if (typeof str !== 'string' || str.length < 20 || str.length > 60000) return null; const i = str.indexOf('.'); if (i < 1) return null;
@@ -90,7 +98,7 @@ function vaultRead(str, key) {
 }
 function tryRestore(key, pass, vault) { // recreate a forgotten account from its signed snapshot (needs the right password too)
   if (!vault || Store.get(key)) return null; const d = vaultRead(vault, key); if (!d) return null;
-  const u = { name: d.n, salt: d.s, hash: d.h, created: d.c || Date.now(), lastLogin: Date.now(), profile: d.p, bank: d.b && typeof d.b.tokens === 'number' ? d.b : { t: Date.now(), tokens: 40000 }, giftDebt: d.g || 0, sus: d.u || 0 };
+  const u = { name: d.n, salt: d.s, hash: d.h, created: d.c || Date.now(), lastLogin: Date.now(), profile: d.p, bank: d.b && typeof d.b.tokens === 'number' ? d.b : { t: Date.now(), tokens: 40000 }, giftDebt: d.g || 0, sus: d.u || 0, wEpoch: d.e | 0 };
   if (d.x) u.xpBank = d.x; if (!checkPw(u, pass)) return null;
   Store.db.users[key] = u; Store.mark(); Store.flush(); log('↺ account restored from vault', u.name); return u;
 }
@@ -180,7 +188,7 @@ const server = http.createServer((req, res) => {
       if (tooMany('ip:' + ip) || tooMany('u:' + key)) return json(res, 429, { ok: false, err: 'ลองผิดบ่อยเกินไป รอสักครู่แล้วลองใหม่' });
       if (reg) {
         const ru = tryRestore(key, pass, b.vault); // account was forgotten by the server (wiped disk) but the browser still has its signed copy
-        if (ru) return json(res, 200, { ok: true, token: newSession(key), name: ru.name, profile: profileOut(ru), vault: vaultOf(ru), restored: true });
+        if (ru) { epochCheck(ru); return json(res, 200, { ok: true, token: newSession(key), name: ru.name, profile: profileOut(ru), vault: vaultOf(ru), restored: true }); }
         if (!cfg.allowRegister) return json(res, 403, { ok: false, err: 'เซิร์ฟเวอร์นี้ปิดรับสมัครใหม่' });
         if (!NAME_RE.test(name)) return json(res, 400, { ok: false, err: 'ชื่อผู้ใช้ต้องยาว 3-16 ตัว (ตัวอักษร/ตัวเลข/_/-)' });
         if (pass.length < 6) return json(res, 400, { ok: false, err: 'รหัสผ่านต้องยาวอย่างน้อย 6 ตัว' });
@@ -192,7 +200,7 @@ const server = http.createServer((req, res) => {
       let restored = false, u = Store.get(name); if (!u && b.vault) { u = tryRestore(key, pass, b.vault); restored = !!u; }
       if (!u || !checkPw(u, pass)) { fail('ip:' + ip); fail('u:' + key); return json(res, 401, { ok: false, err: 'ชื่อหรือรหัสผ่านไม่ถูกต้อง' }); }
       if (u.banned) return json(res, 403, { ok: false, err: 'บัญชีนี้ถูกระงับ' });
-      u.lastLogin = Date.now(); Store.mark(); return json(res, 200, Object.assign({ ok: true, token: newSession(key), name: u.name, profile: profileOut(u), vault: vaultOf(u) }, restored ? { restored: true } : {}));
+      epochCheck(u); u.lastLogin = Date.now(); Store.mark(); return json(res, 200, Object.assign({ ok: true, token: newSession(key), name: u.name, profile: profileOut(u), vault: vaultOf(u) }, restored ? { restored: true } : {}));
     }, 65536);
   }
   res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' }); res.end('not found');
@@ -225,7 +233,7 @@ server.on('upgrade', (req, sock, head) => {
 function addClient(ws, u, key, ip) {
   const c = { id: nextId++, ws, u, key, name: u.name, ip, st: null, car: null, alive: true, protUntil: Date.now() + cfg.spawnProtectSec * 1000, ping: 0, pgN: 0, pgT: 0, bucket: 200, bt: Date.now(), lastChat: 0, chatN: [], lastFire: 0, hitBank: 40, hitT: Date.now(), lastHurtBy: null, lastSave: 0, joined: Date.now(), muted: false, dirty: false, lastSeen: Date.now() };
   clients.set(c.id, c); online.set(key, c);
-  send(c, { t: 'welcome', id: c.id, name: c.name, profile: profileOut(u), server: { name: cfg.serverName, max: cfg.maxPlayers, hz: cfg.tickHz, daySec: cfg.daySec }, players: [...clients.values()].filter(o => o !== c).map(pub), world: { h: +worldHour().toFixed(3), rain: world.rainTarget } });
+  send(c, { t: 'welcome', id: c.id, name: c.name, admin: isAdminC(c) ? 1 : 0, profile: profileOut(u), server: { name: cfg.serverName, max: cfg.maxPlayers, hz: cfg.tickHz, daySec: cfg.daySec }, players: [...clients.values()].filter(o => o !== c).map(pub), world: { h: +worldHour().toFixed(3), rain: world.rainTarget } });
   rosterDirty = true; bcast({ t: 'join', p: pub(c) }, c); sys('➜ ' + c.name + ' เข้าร่วมเกม'); log('+ join', c.name, '(' + clients.size + ')');
   ws.on('message', (d, bin) => { if (bin) return; onMessage(c, d); });
   ws.on('close', () => removeClient(c)); ws.on('error', () => { });
@@ -280,26 +288,30 @@ function onMessage(c, raw) {
       const val = it.p * n, bc = bankOf(c.u), bv = bankOf(v.u); bc.tokens = Math.max(-RP_BANK, bc.tokens - val); c.u.giftDebt = Math.min(RP_BANK * 2, (c.u.giftDebt || 0) + val); bv.tokens = Math.min(RP_BANK * 2, bv.tokens + val); Store.mark();
       send(v, { t: 'gift', from: c.id, name: c.name, id: m.id, n, back: m.back ? 1 : 0 }); log('~ give', c.name, '->', v.name, m.id, 'x' + n); break;
     }
-    case 'save': { if (now - c.lastSave < 2000) return; c.lastSave = now; sanitizeProfile(c.u, m.p); if (now - (c.lastVault || 0) > 3000) { c.lastVault = now; send(c, { t: 'vault', v: vaultOf(c.u) }); } break; }
+    case 'save': { if (now - c.lastSave < 2000) return; c.lastSave = now; sanitizeProfile(c.u, m.p); if (now < (c.stripUntil || 0)) stripWeapons(c.u); if (now - (c.lastVault || 0) > 3000) { c.lastVault = now; send(c, { t: 'vault', v: vaultOf(c.u) }); } break; }
+    case 'alist': { if (!isAdminC(c) || now - (c.lastAl || 0) < 800) return; c.lastAl = now;
+      send(c, { t: 'alist', n: Object.keys(Store.db.users).length, ep: cfg.weaponEpoch, p: [...clients.values()].map(o => { const pr = o.u.profile; return { id: o.id, name: o.name, ping: o.ping | 0, money: Math.floor(pr.money || 0), w: Object.keys(pr.weapons || {}), mu: o.muted ? 1 : 0, k: pr.pvpKills | 0, d: pr.pvpDeaths | 0, ps: pr.playSec | 0, adm: isAdminC(o) ? 1 : 0 }; }) }); break; }
     case 'pg': { if (m.n === c.pgN && c.pgT) { c.ping = Math.round(now - c.pgT); c.pgT = 0; } break; }
     case 'bye': { c.ws.close(); break; }
   }
 }
+const isAdminC = c => !!c.admin || cfg.admins.some(n => n.toLowerCase() === c.name.toLowerCase());
+function stripLive(t) { t.stripUntil = Date.now() + 6000; send(t, { t: 'strip' }); } // player is online: the client drops its guns right away
 function command(c, text) {
-  const [cmd, ...rest] = text.slice(1).split(' '), arg = rest.join(' ').trim(), isAdmin = !!c.admin || cfg.admins.map(s => s.toLowerCase()).includes(c.name.toLowerCase());
+  const [cmd, ...rest] = text.slice(1).split(' '), arg = rest.join(' ').trim(), isAdmin = isAdminC(c);
   switch (cmd.toLowerCase()) {
     case 'w': case 'msg': { const sp = arg.indexOf(' '); if (sp < 0) return sys('ใช้: /w ชื่อ ข้อความ', c); const t = byName(arg.slice(0, sp)); if (!t) return sys('ไม่พบผู้เล่นชื่อนั้น', c); const m = filterBad(cleanText(arg.slice(sp + 1), 140)); send(t, { t: 'chat', id: c.id, name: c.name, m, to: 1 }); send(c, { t: 'chat', id: c.id, name: c.name, m, to: 2, toName: t.name }); return; }
     case 'players': case 'list': return sys('ออนไลน์ ' + clients.size + '/' + cfg.maxPlayers + ': ' + [...clients.values()].map(o => o.name).join(', '), c);
     case 'admin': { // /admin <code> — unlocks the admin commands for this connection only (never saved); /admin off — give them up
-      if (arg.toLowerCase() === 'off') { c.admin = false; return sys('ออกจากโหมดแอดมินแล้ว', c); }
+      if (arg.toLowerCase() === 'off') { c.admin = false; send(c, { t: 'adm', on: isAdminC(c) ? 1 : 0 }); return sys('ออกจากโหมดแอดมินแล้ว', c); }
       if (cfg.adminCode.length < 8) return sys('เซิร์ฟเวอร์นี้ยังไม่ได้ตั้งรหัสแอดมิน (ตั้งค่า ADMIN_CODE อย่างน้อย 8 ตัว)', c);
       if (c.admin) return sys('คุณเป็นแอดมินอยู่แล้ว — พิมพ์ /help ดูคำสั่ง', c);
       const k = 'adm:' + c.ip; if (tooMany(k)) return sys('ใส่รหัสผิดบ่อยเกินไป รอสักครู่แล้วลองใหม่', c);
       const h = x => crypto.createHash('sha256').update(String(x)).digest();
       if (!crypto.timingSafeEqual(h(arg), h(cfg.adminCode))) { fail(k, 5, 300000); log('! wrong admin code from', c.name, c.ip); return sys('รหัสแอดมินไม่ถูกต้อง', c); }
-      c.admin = true; log('* admin mode ON for', c.name); return sys('✔ เปิดโหมดแอดมินแล้ว (ใช้ได้จนกว่าจะออกจากเกม) — พิมพ์ /help ดูคำสั่ง', c);
+      c.admin = true; send(c, { t: 'adm', on: 1 }); log('* admin mode ON for', c.name); return sys('✔ เปิดโหมดแอดมินแล้ว (ใช้ได้จนกว่าจะออกจากเกม) — พิมพ์ /help ดูคำสั่ง', c);
     }
-    case 'help': return sys('คำสั่ง: /w ชื่อ ข้อความ · /players · /admin รหัส · ' + (isAdmin ? '/kick ชื่อ · /mute ชื่อ · /unmute ชื่อ · /ban ชื่อ · /unban ชื่อ · /passwd ชื่อ รหัสใหม่ · /say ข้อความ · /time 0-24 · /rain 0-1 · /admin off' : 'Tab = รายชื่อผู้เล่น'), c);
+    case 'help': return sys('คำสั่ง: /w ชื่อ ข้อความ · /players · /admin รหัส · ' + (isAdmin ? '/kick ชื่อ · /mute ชื่อ · /unmute ชื่อ · /ban ชื่อ · /unban ชื่อ · /passwd ชื่อ รหัสใหม่ · /clearguns [ชื่อ] · /say ข้อความ · /time 0-24 · /rain 0-1 · /admin off' : 'Tab = รายชื่อผู้เล่น'), c);
   }
   if (!isAdmin) return sys('ไม่รู้จักคำสั่ง (พิมพ์ /help)', c);
   switch (cmd.toLowerCase()) {
@@ -309,6 +321,11 @@ function command(c, text) {
       u.banned = cmd.toLowerCase() === 'ban'; Store.mark(); const t = byName(arg); if (t && u.banned) { send(t, { t: 'err', code: 'ban', m: 'บัญชีนี้ถูกระงับ' }); t.ws.close(); } log('* ' + cmd.toLowerCase(), u.name, 'by', c.name); return sys(u.name + (u.banned ? ' ถูกแบน' : ' ปลดแบนแล้ว'), c); }
     case 'passwd': { const sp = arg.indexOf(' '), u = sp > 0 ? Store.get(arg.slice(0, sp)) : null, pw = sp > 0 ? arg.slice(sp + 1).trim() : ''; if (!u || pw.length < 6 || pw.length > 64) return sys('ใช้: /passwd ชื่อ รหัสใหม่ (6-64 ตัว)', c);
       const salt = crypto.randomBytes(16); u.salt = salt.toString('hex'); u.hash = hashPw(pw, salt).toString('hex'); Store.mark(); Store.flush(); log('* password reset for', u.name, 'by', c.name); return sys('เปลี่ยนรหัสผ่านของ ' + u.name + ' แล้ว', c); }
+    case 'clearguns': { // no name = every account on the server
+      if (arg) { const u = Store.get(arg); if (!u) return sys('ไม่พบบัญชีชื่อนั้น', c); const n = stripWeapons(u); Store.flush(); const t = byName(arg); if (t) stripLive(t); log('* guns removed from', u.name, 'by', c.name); return sys('ลบปืนของ ' + u.name + ' แล้ว (' + n + ' กระบอก)', c); }
+      cfg.weaponEpoch++; saveState(); let accs = 0, guns = 0; for (const k in Store.db.users) { const u = Store.db.users[k], n = stripWeapons(u); if (n) { accs++; guns += n; } } for (const t of clients.values()) stripLive(t);
+      Store.flush(); log('* ALL guns removed by', c.name, '-> epoch', cfg.weaponEpoch, '(' + accs + ' accounts, ' + guns + ' guns)');
+      return sys('🔫 ลบปืนทุกบัญชีแล้ว: ' + accs + ' บัญชี / ' + guns + ' กระบอก (epoch ' + cfg.weaponEpoch + ') — บน Render ให้ตั้ง WEAPON_EPOCH=' + cfg.weaponEpoch + ' ใน Environment เพื่อให้คงอยู่หลังรีเซ็ต', c); }
     case 'say': return sys('📢 ' + arg);
     case 'time': { const h = parseFloat(arg); if (isFinite(h)) { setHour(((h % 24) + 24) % 24); bcast(worldMsg()); } return; }
     case 'rain': { const r = clamp(parseFloat(arg) || 0, 0, 1); world.rainTarget = r; world.nextWeather = Date.now() + 240000; bcast(worldMsg()); return; }
